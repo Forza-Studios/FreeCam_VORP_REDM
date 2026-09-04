@@ -35,7 +35,7 @@ local function NativePhoto()
     -- Client handles screenshot + Discord upload directly via screenshot-basic API
     exports['screenshot-basic']:requestScreenshotUpload(
         Config.WebhookURL,
-        'files[]',
+        'file',
         { encoding = 'jpg', quality = 0.90 },
         function(data)
             -- data contains the webhook response, log for debugging
