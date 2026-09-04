@@ -197,7 +197,8 @@ function TakeShot()
                     image.attachments[1].url,
                     GetPlayerName(PlayerId()),
                     image.id,
-                    image.attachments[1].id
+                    image.attachments[1].id,
+                    image.attachments[1].filename
                 )
             end
         end

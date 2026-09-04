@@ -58,16 +58,17 @@ local function postToDiscord(description, image, messageId)
 end
 
 RegisterNetEvent('freecam:screenshot')
-AddEventHandler('freecam:screenshot', function(url, playerName, messageId, attachmentId)
+AddEventHandler('freecam:screenshot', function(url, playerName, messageId, attachmentId, filename)
     local src = source
     local displayName = GetPlayerName(src) or playerName or "Player"
+    local imageUrl = filename and ("attachment://" .. filename) or url
 
     local data = {
         content = "**" .. displayName .. "** took a screenshot!",
         embeds = {{
             title = "📸 FreeCam Screenshot",
             color = 65280,
-            image = { url = url },
+            image = { url = imageUrl },
             footer = { text = "VORP" },
             timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
         }},
@@ -82,7 +83,7 @@ AddEventHandler('freecam:screenshot', function(url, playerName, messageId, attac
             if err == 200 or err == 204 then
                 print("✅ Screenshot embed updated")
             else
-                print("❌ PATCH failed: " .. tostring(err))
+                print("❌ PATCH failed: " .. tostring(err) .. " | Response: " .. tostring(text))
             end
         end,
         "PATCH",
