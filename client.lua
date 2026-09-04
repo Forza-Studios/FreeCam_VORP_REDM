@@ -32,15 +32,26 @@ local function NativePhoto()
 
     Wait(350)
 
-    -- Client handles screenshot + Discord upload directly via screenshot-basic API
-    exports['screenshot-basic']:requestScreenshotUpload(
-        Config.WebhookURL,
-        'file',
+    -- Client only captures the screenshot locally (base64 data URI).
+    -- The upload to Discord happens server-side (see server.lua) so the
+    -- webhook URL never has to live in a client script, and the HTTP
+    -- request doesn't carry the NUI/browser fingerprint that trips
+    -- Discord/Cloudflare's bot filtering (error 40333).
+    exports['screenshot-basic']:requestScreenshot(
         { encoding = 'jpg', quality = 0.90 },
-        function(data)
-            -- data contains the webhook response, log for debugging
-            print('COI CAM: screenshot uploaded to Discord (response: ' .. tostring(data) .. ')');
-            TriggerEvent('chat:addMessage', { args = '📸 Photo uploaded.' })
+        function(dataUri)
+            if not dataUri or not dataUri:find('base64,') then
+                print('COI CAM: screenshot capture failed or returned unexpected data')
+                return
+            end
+
+            -- Latent event: rate-limited so a big image doesn't spike the
+            -- player's bandwidth or block other network traffic. bps below
+            -- caps the transfer at ~2 MB/s, which a single JPEG screenshot
+            -- will comfortably fit inside a second or two.
+            TriggerLatentServerEvent('coi_cam:upload', 2 * 1024 * 1024, dataUri)
+
+            TriggerEvent('chat:addMessage', { args = '📸 Photo captured, uploading...' })
         end
     )
 
