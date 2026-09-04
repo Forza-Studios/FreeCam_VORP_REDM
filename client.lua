@@ -99,6 +99,10 @@ CreateThread(function()
     while true do
         Wait(0)
 
+        if not Cam and IsControlJustPressed(0, 0xA8E3F467) then
+            EnableCam()
+        end
+
         if Cam then
 
             local pos=GetCamCoord(Cam)
@@ -108,6 +112,7 @@ CreateThread(function()
             DisableAllControlActions(0)
             EnableControlAction(0,`INPUT_MP_TEXT_CHAT_ALL`)
             EnableControlAction(0,`INPUT_FRONTEND_ACCEPT`)
+            EnableControlAction(0, 0xA8E3F467)
 
             if not ShowHud then
                 HideHudAndRadarThisFrame()
@@ -121,7 +126,7 @@ CreateThread(function()
                 OpenAlbum()
             end
 
-            if IsDisabledControlJustPressed(0,`INPUT_FRONTEND_DELETE`) then
+            if IsControlJustPressed(0, 0xA8E3F467) or IsControlJustPressed(0,`INPUT_FRONTEND_CANCEL`) then
                 DisableCam()
             end
 
@@ -195,8 +200,8 @@ CreateThread(function()
                 SetTextCentre(true)
                 DisplayText(
                     CreateVarString(10,"LITERAL_STRING",
-                    "COI CAMERA | /cam | Enter=Photo | J=Album | Backspace=Exit"),
-                    0.5,0.02)
+                    "COI CAMERA | /cam | Enter=Photo | J=Album | F1=Exit"),
+                    0.5,0.92)
             end
         end
     end

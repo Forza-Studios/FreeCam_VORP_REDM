@@ -10,5 +10,3 @@ description 'In Game FreeCam Webhook'
 
 client_script 'client.lua'
 server_script 'server.lua'
-
-dependency 'screenshot-basic'
