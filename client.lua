@@ -1,467 +1,209 @@
-local Cam = nil
-local Controller = nil
-local StartingFov = 0.0
+local Cam, Controller = nil, nil
+local Speed = 0.05
+local StartFov = 70.0
 local ShowHud = true
-local Speed = Config.Speed
-local CameraLocked = false
-local Timecycle = 1
-local FilterEnabled = false
-local GridEnabled = false
-local AttachedCamEntity = nil
-local FollowCam = false
+local TakingShot = false
 
-RegisterNetEvent('freecam:toggle')
-RegisterNetEvent('freecam:toggleLock')
-RegisterNetEvent('freecam:toggleAttached')
-
-function LoadModel(model)
-	if IsModelInCdimage(model) then
-		RequestModel(model)
-
-		while not HasModelLoaded(model) do
-			Wait(0)
-		end
-
-		return true
-	else
-		return false
-	end
+local function LoadModel(model)
+    RequestModel(model)
+    while not HasModelLoaded(model) do Wait(0) end
 end
 
-function AttachCam(entity, followCam)
-	local entPos = GetEntityCoords(entity)
-	local camPos
+local function NativePhoto()
+    if TakingShot then return end
+    TakingShot = true
 
-	if Cam then
-		camPos = GetCamCoord(Cam)
-	else
-		camPos = GetGameplayCamCoord()
+    if not AnimpostfxIsRunning("PhotoMode_Bounds") then
+        AnimpostfxPlay("PhotoMode_Bounds")
+    end
 
-		EnableFreeCam()
-	end
+    AnimpostfxPlay("CameraViewFinder")
 
-	if followCam then
-		local y = #(camPos.xy - entPos.xy)
-		local z = camPos.z - entPos.z
-		AttachCamToEntity(Cam, entity, 0.0, -y, z, true)
-	else
-		AttachCamToEntity(Cam, entity, camPos - entPos, false)
-	end
+    Citizen.InvokeNative(0x3C8F74E8FE751614)
+    Citizen.InvokeNative(0xD45547D8396F002A)
+    Citizen.InvokeNative(0xA15BFFC0A01B34E1)
+    Citizen.InvokeNative(0xFA91736933AB3D93, true)
+    Citizen.InvokeNative(0x8B3296278328B5EB, 2)
+    Citizen.InvokeNative(0x2705D18C11B61046, false)
+    Citizen.InvokeNative(0xD1031B83AC093BC7, "SetRegionPhotoTakenStat")
+    Citizen.InvokeNative(0x9937FACBBF267244, "SetDistrictPhotoTakenStat")
+    Citizen.InvokeNative(0x8952E857696B8A79, "SetStatePhotoTakenStat")
+    Citizen.InvokeNative(0x57639FD876B68A91, 0)
 
-	AttachedCamEntity = entity
-	FollowCam = followCam
+    Wait(350)
+
+    TriggerServerEvent("coi_cam:upload")
+
+    Wait(150)
+
+    AnimpostfxStop("CameraViewFinder")
+    AnimpostfxStop("PhotoMode_Bounds")
+
+    TakingShot = false
 end
 
-function EnableFreeCam()
-	local x, y, z = table.unpack(GetGameplayCamCoord())
-	local pitch, roll, yaw = table.unpack(GetGameplayCamRot(2))
-	local fov = GetGameplayCamFov()
-
-	-- Moving the camera with SetCamCoord/SetCamRot disables the game's
-	-- anti-aliasing while the camera is moving. Attaching the camera to an
-	-- entity and moving that entity instead functions as a workaround for
-	-- positioning (but not rotating) the camera.
-	LoadModel(Config.ControllerModel)
-	Controller = CreateObjectNoOffset(Config.ControllerModel, x, y, z, false, false, false, false)
-	FreezeEntityPosition(Controller, true)
-	SetEntityVisible(Controller, false)
-
-	Cam = CreateCam("DEFAULT_SCRIPTED_CAMERA", true)
-	SetCamRot(Cam, pitch, roll, yaw, 2)
-	SetCamFov(Cam, fov)
-	RenderScriptCams(true, true, 500, true, true)
-	StartingFov = fov
-
-	AttachCamToEntity(Cam, Controller, 0.0, 0.0, 0.0, true)
-
-	if FilterEnabled then
-		SetTimecycleModifier(Timecycles[Timecycle])
-	end
-
-	if GridEnabled then
-		AnimpostfxPlay("CameraViewFinder")
-	end
+local function OpenAlbum()
+    LaunchAppWithEntry("social_club_feed", "launch_to_photos")
 end
 
-function DisableFreeCam()
-	RenderScriptCams(false, true, 500, true, true)
-	SetCamActive(Cam, false)
-	DetachCam(Cam)
-	DestroyCam(Cam, true)
-	Cam = nil
+local function EnableCam()
 
-	DeleteObject(Controller)
+    local pos = GetGameplayCamCoord()
+    local rot = GetGameplayCamRot(2)
+    local fov = GetGameplayCamFov()
 
-	AttachedCamEntity = nil
+    LoadModel(`scriptedball`)
 
-	if FilterEnabled then
-		ClearTimecycleModifier()
-	end
+    Controller = CreateObjectNoOffset(`scriptedball`,
+        pos.x,pos.y,pos.z,false,false,false,false)
 
-	if GridEnabled then
-		AnimpostfxStop("CameraViewFinder")
-	end
+    FreezeEntityPosition(Controller,true)
+    SetEntityVisible(Controller,false)
+
+    Cam = CreateCam("DEFAULT_SCRIPTED_CAMERA",true)
+
+    SetCamRot(Cam,rot.x,rot.y,rot.z,2)
+    SetCamFov(Cam,fov)
+
+    StartFov=fov
+
+    AttachCamToEntity(Cam,Controller,0,0,0,true)
+
+    RenderScriptCams(true,true,500,true,true)
 end
 
-function ToggleFreeCam()
-	if Cam then
-		DisableFreeCam()
-	else
-		EnableFreeCam()
-	end
+local function DisableCam()
+    if not Cam then return end
+
+    RenderScriptCams(false,true,500,true,true)
+
+    DestroyCam(Cam,true)
+    DeleteObject(Controller)
+
+    Cam=nil
+    Controller=nil
 end
 
-function ToggleFreeCamLock()
-	if not Cam then
-		EnableFreeCam()
-	end
+RegisterCommand("cam",function()
+    if Cam then
+        DisableCam()
+    else
+        EnableCam()
+    end
+end,false)
 
-	CameraLocked = not CameraLocked
-end
+CreateThread(function()
 
-function NextFilter()
-	Timecycle = Timecycle == #Timecycles and 1 or Timecycle + 1
-	SetTimecycleModifier(Timecycles[Timecycle])
-	FilterEnabled = true
-end
+    TriggerEvent("chat:addSuggestion","/cam","COI Camera")
 
-function PrevFilter()
-	Timecycle = Timecycle == 1 and #Timecycles or Timecycle - 1
-	SetTimecycleModifier(Timecycles[Timecycle])
-	FilterEnabled = true
-end
+    while true do
+        Wait(0)
 
-function ToggleFilter()
-	if FilterEnabled then
-		ClearTimecycleModifier()
-		FilterEnabled = false
-	else
-		SetTimecycleModifier(Timecycles[Timecycle])
-		FilterEnabled = true
-	end
-end
+        if Cam then
 
-function ToggleGrid()
-	if GridEnabled then
-		AnimpostfxStop('CameraViewFinder')
-		GridEnabled = false
-	else
-		AnimpostfxPlay('CameraViewFinder')
-		GridEnabled = true
-	end
-end
+            local pos=GetCamCoord(Cam)
+            local rot=GetCamRot(Cam,2)
+            local fov=GetCamFov(Cam)
 
-function ToggleAttachedOrFollowCam(followCam)
-	if AttachedCamEntity then
-		SetEntityCoordsNoOffset(Controller, GetCamCoord(Cam))
-		AttachCamToEntity(Cam, Controller, 0.0, 0.0, 0.0, true)
-		AttachedCamEntity = nil
-		FollowCam = false
-	else
-		AttachCam(PlayerPedId(), followCam)
-	end
-end
+            DisableAllControlActions(0)
+            EnableControlAction(0,`INPUT_MP_TEXT_CHAT_ALL`)
+            EnableControlAction(0,`INPUT_FRONTEND_ACCEPT`)
 
-function ToggleAttachedCam()
-	if FollowCam then
-		ToggleFollowCam()
-	end
+            if not ShowHud then
+                HideHudAndRadarThisFrame()
+            end
 
-	ToggleAttachedOrFollowCam(false)
-end
+            if IsDisabledControlJustPressed(0,`INPUT_FRONTEND_ACCEPT`) then
+                NativePhoto()
+            end
 
-function ToggleFollowCam()
-	if AttachedCamEntity and not FollowCam then
-		ToggleAttachedCam()
-	end
+            if IsDisabledControlJustPressed(0,`INPUT_OPEN_JOURNAL`) then
+                OpenAlbum()
+            end
 
-	ToggleAttachedOrFollowCam(true)
-end
+            if IsDisabledControlJustPressed(0,`INPUT_FRONTEND_DELETE`) then
+                DisableCam()
+            end
 
-function TakeShot()
-    local oldHud = ShowHud
-    ShowHud = false
-    Wait(200)
-    PlaySoundFrontend("Camera_Shoot", "RDRO_Character_Creator_Sounds", true)
+            if IsDisabledControlJustPressed(0,`INPUT_COVER`) then
+                ShowHud=not ShowHud
+            end
 
-    exports['screenshot-basic']:requestScreenshotUpload(
-        Config.WebhookURL .. '?wait=true',
-        'files[]',
-        function(data)
-            if not data then return end
+            if IsDisabledControlPressed(0,`INPUT_CREATOR_LT`) then
+                Speed=math.min(Speed+0.001,1.0)
+            end
 
-            local ok, image = pcall(json.decode, data)
-            if ok and image and image.attachments and image.attachments[1] then
-                TriggerServerEvent(
-                    'freecam:screenshot',
-                    image.attachments[1].url,
-                    GetPlayerName(PlayerId()),
-                    image.id,
-                    image.attachments[1].id,
-                    image.attachments[1].filename
-                )
+            if IsDisabledControlPressed(0,`INPUT_CREATOR_RT`) then
+                Speed=math.max(Speed-0.001,0.001)
+            end
+
+            if IsDisabledControlPressed(0,`INPUT_JUMP`) then
+                pos=vector3(pos.x,pos.y,pos.z+Speed)
+            end
+
+            if IsDisabledControlPressed(0,`INPUT_SPRINT`) then
+                pos=vector3(pos.x,pos.y,pos.z-Speed)
+            end
+
+            local axisX=GetDisabledControlNormal(0,0xA987235F)
+            local axisY=GetDisabledControlNormal(0,0xD2047988)
+
+            rot=vector3(
+                math.max(math.min(89.9,rot.x-axisY*8),-89.9),
+                rot.y,
+                rot.z-axisX*8
+            )
+
+            local yaw=-rot.z*math.pi/180
+            local fx=Speed*math.sin(yaw)
+            local fy=Speed*math.cos(yaw)
+
+            local side=math.rad((-rot.z+90)%360)
+            local sx=Speed*math.sin(side)
+            local sy=Speed*math.cos(side)
+
+            if IsDisabledControlPressed(0,`INPUT_MOVE_UP_ONLY`) then
+                pos=vector3(pos.x+fx,pos.y+fy,pos.z)
+            end
+
+            if IsDisabledControlPressed(0,`INPUT_MOVE_DOWN_ONLY`) then
+                pos=vector3(pos.x-fx,pos.y-fy,pos.z)
+            end
+
+            if IsDisabledControlPressed(0,`INPUT_MOVE_LEFT_ONLY`) then
+                pos=vector3(pos.x-sx,pos.y-sy,pos.z)
+            end
+
+            if IsDisabledControlPressed(0,`INPUT_MOVE_RIGHT_ONLY`) then
+                pos=vector3(pos.x+sx,pos.y+sy,pos.z)
+            end
+
+            if IsDisabledControlPressed(0,`INPUT_GAME_MENU_TAB_RIGHT_SECONDARY`) then
+                fov=math.min(fov+1,120)
+            end
+
+            if IsDisabledControlPressed(0,`INPUT_GAME_MENU_TAB_LEFT_SECONDARY`) then
+                fov=math.max(fov-1,20)
+            end
+
+            SetEntityCoordsNoOffset(Controller,pos.x,pos.y,pos.z,false,false,false)
+            SetCamRot(Cam,rot.x,rot.y,rot.z,2)
+            SetCamFov(Cam,fov)
+
+            if ShowHud then
+                SetTextScale(0.35,0.35)
+                SetTextCentre(true)
+                DisplayText(
+                    CreateVarString(10,"LITERAL_STRING",
+                    "COI CAMERA | /cam | Enter=Photo | J=Album | Backspace=Exit"),
+                    0.5,0.02)
             end
         end
-    )
-
-    Wait(1000)
-    ShowHud = oldHud
-end
-
-function CheckControls(func, pad, controls)
-	if type(controls) == 'number' then
-		return func(pad, controls)
-	end
-
-	for _, control in ipairs(controls) do
-		if func(pad, control) then
-			return true
-		end
-	end
-
-	return false
-end
-
-RegisterCommand('cam', ToggleFreeCam)
-RegisterCommand('lockcam', ToggleFreeCamLock)
-RegisterCommand('attachcam', ToggleAttachedCam)
-RegisterCommand('followcam', ToggleFollowCam)
-
-AddEventHandler('cam:toggle', ToggleFreeCam)
-AddEventHandler('cam:toggleLock', ToggleFreeCamLock)
-AddEventHandler('cam:toggleAttached', ToggleAttachedCam)
-AddEventHandler('cam:toggleFollow', ToggleFollowCam)
-
-function DrawText(text, x, y, centred)
-	SetTextScale(0.35, 0.35)
-	SetTextColor(255, 255, 255, 255)
-	SetTextCentre(centred)
-	SetTextDropshadow(1, 0, 0, 0, 200)
-	SetTextFontForCurrentCommand(0)
-	DisplayText(CreateVarString(10, "LITERAL_STRING", text), x, y)
-end
-
-AddEventHandler('onResourceStop', function(resourceName)
-	if GetCurrentResourceName() == resourceName and Cam then
-		DisableFreeCam()
-	end
+    end
 end)
 
-CreateThread(function()
-	TriggerEvent('chat:addSuggestion', '/freecam', 'Toggle freecam mode')
-	TriggerEvent('chat:addSuggestion', '/lockcam', 'Lock/unlock the freecam')
-	TriggerEvent('chat:addSuggestion', '/attachcam', 'Attach/detach camera in place')
-	TriggerEvent('chat:addSuggestion', '/followcam', 'Follow behind player ped')
-
-	while true do
-		Wait(0)
-
-		if Cam then
-			local x, y, z = table.unpack(GetCamCoord(Cam))
-			local pitch, roll, yaw = table.unpack(GetCamRot(Cam, 2))
-			local fov = GetCamFov(Cam)
-
-			-- Show controls or hide HUD
-			if ShowHud then
-				DrawText('Camera Mode:', 0.5, 0.01, true)
-				if CameraLocked then
-					DrawText('Locked', 0.5, 0.03, true)
-				elseif AttachedCamEntity then
-					if FollowCam then
-						DrawText('Follow', 0.5, 0.03, true)
-					else
-						DrawText('Attached', 0.5, 0.03, true)
-					end
-				else
-					DrawText('Free', 0.5, 0.03, true)
-				end
-
-				DrawText(string.format('Coordinates:\nX: %.2f\nY: %.2f\nZ: %.2f\nPitch: %.2f\nRoll: %.2f\nYaw: %.2f\nFOV: %.0f\nFilter: %s', x, y, z, pitch, roll, yaw, fov, FilterEnabled and Timecycles[Timecycle] or 'None'), 0.01, 0.3, false)
-
-				if CameraLocked or AttachedCamEntity then
-					DrawText('Return to Free mode - V', 0.5, 0.96)
-				else
-					DrawText(string.format('FreeCam Speed: %.3f', Speed), 0.5, 0.90, true)
-					DrawText('W/A/S/D - Move, Spacebar/Shift - Up/Down, Page Up/Page Down - Change speed, Z/X - Zoom, C/V - Roll, B - Reset, Q - Hide HUD', 0.5, 0.93, true)
-					DrawText('F/G - Cycle Filter, H - Toggle Filter, J - Toggle Grid, Enter - Send to Discord', 0.5, 0.96, true)
-				end
-			else
-				HideHudAndRadarThisFrame()
-			end
-
-			DisableFirstPersonCamThisFrame()
-
-			if CameraLocked or AttachedCamEntity then
-				DisableControlAction(0, Config.ExitLockedCamControl, true)
-
-				if CheckControls(IsDisabledControlJustReleased, 0, Config.ExitLockedCamControl) then
-					if CameraLocked then
-						ToggleFreeCamLock()
-					elseif FollowCam then
-						ToggleFollowCam()
-					else
-						ToggleAttachedCam()
-					end
-				end
-
-				if FollowCam then
-					SetCamRot(Cam, GetEntityRotation(AttachedCamEntity))
-				end
-			else
-				-- Disable all controls except a few while in freecam mode
-				DisableAllControlActions(0)
-				EnableControlAction(0, `INPUT_FRONTEND_PAUSE_ALTERNATE`)
-				EnableControlAction(0, `INPUT_MP_TEXT_CHAT_ALL`)
-				EnableControlAction(0, Config.TakeShotControl)
-
-				if CheckControls(IsDisabledControlJustReleased, 0, Config.TakeShotControl) then
-					TakeShot()
-				end
-
-				-- Ensure speed is within the specified range
-				if Speed < Config.MinSpeed then
-					Speed = Config.MinSpeed
-				end
-				if Speed > Config.MaxSpeed then
-					Speed = Config.MaxSpeed
-				end
-
-				-- Ensure FOV is within the specified range
-				if fov < Config.MinFov then
-					fov = Config.MinFov
-				end
-				if fov > Config.MaxFov then
-					fov = Config.MaxFov
-				end
-
-				-- Toggle HUD
-				if CheckControls(IsDisabledControlJustPressed, 0, Config.ToggleHudControl) then
-					ShowHud = not ShowHud
-				end
-
-				-- Reset camera
-				if CheckControls(IsDisabledControlJustPressed, 0, Config.ResetCamControl) then
-					roll = 0.0
-					fov = StartingFov
-				end
-
-				-- Increase movement speed
-				if CheckControls(IsDisabledControlPressed, 0, Config.IncreaseSpeedControl) then
-					Speed = Speed + Config.SpeedIncrement
-				end
-
-				-- Decrease movement speed
-				if CheckControls(IsDisabledControlPressed, 0, Config.DecreaseSpeedControl) then
-					Speed = Speed - Config.SpeedIncrement
-				end
-
-				-- Move up
-				if CheckControls(IsDisabledControlPressed, 0, Config.UpControl) then
-					z = z + Speed
-				end
-
-				-- Move down
-				if CheckControls(IsDisabledControlPressed, 0, Config.DownControl) then
-					z = z - Speed
-				end
-
-				-- Rotate camera using the mouse/analog stick
-				local axisX = GetDisabledControlNormal(0, 0xA987235F)
-				local axisY = GetDisabledControlNormal(0, 0xD2047988)
-
-				if axisX ~= 0.0 or axisY ~= 0.0 then
-					yaw = yaw + axisX * -1.0 * Config.SpeedUd * 1.0
-					pitch = math.max(math.min(89.9, pitch + axisY * -1.0 * Config.SpeedLr * 1.0), -89.9)
-				end
-
-				-- Roll left
-				if CheckControls(IsDisabledControlPressed, 0, Config.RollLeftControl) then
-					roll = roll - Config.RollSpeed
-				end
-
-				-- Roll right
-				if CheckControls(IsDisabledControlPressed, 0, Config.RollRightControl) then
-					roll = roll + Config.RollSpeed
-				end
-
-				-- Determine change in forward/backward movement
-				local r1 = -yaw * math.pi / 180
-				local dx1 = Speed * math.sin(r1)
-				local dy1 = Speed * math.cos(r1)
-
-				-- Determine change in left/right movement
-				local r2 = math.floor(yaw + 90.0) % 360 * -1.0 * math.pi / 180
-				local dx2 = Speed * math.sin(r2)
-				local dy2 = Speed * math.cos(r2)
-
-				-- Move forward
-				if CheckControls(IsDisabledControlPressed, 0, Config.ForwardControl) then
-					x = x + dx1
-					y = y + dy1
-				end
-
-				-- Move backward
-				if CheckControls(IsDisabledControlPressed, 0, Config.BackwardControl) then
-					x = x - dx1
-					y = y - dy1
-				end
-
-				-- Move left
-				if CheckControls(IsDisabledControlPressed, 0, Config.LeftControl) then
-					x = x + dx2
-					y = y + dy2
-				end
-
-				-- Move right
-				if CheckControls(IsDisabledControlPressed, 0, Config.RightControl) then
-					x = x - dx2
-					y = y - dy2
-				end
-
-				-- Increase FOV
-	if CheckControls(IsDisabledControlPressed, 0, Config.IncreaseFovControl) then
-		fov = fov + Config.ZoomSpeed
-	end
-
-	-- Decrease FOV
-	if CheckControls(IsDisabledControlPressed, 0, Config.DecreaseFovControl) then
-		fov = fov - Config.ZoomSpeed
-	end
-
-	-- Next filter
-	if CheckControls(IsDisabledControlJustPressed, 0, Config.NextFilterControl) then
-		NextFilter()
-	end
-
-	-- Previous filter
-	if CheckControls(IsDisabledControlJustPressed, 0, Config.PrevFilterControl) then
-		PrevFilter()
-	end
-
-	-- Reset filter
-	if CheckControls(IsDisabledControlJustPressed, 0, Config.ToggleFilterControl) then
-		ToggleFilter()
-	end
-
-	-- Toggle grid
-	if CheckControls(IsDisabledControlJustPressed, 0, Config.ToggleGridControl) then
-		ToggleGrid()
-	end
-
-				SetEntityCoordsNoOffset(Controller, x, y, z)
-				SetCamRot(Cam, pitch, roll, yaw, 2)
-				SetCamFov(Cam, fov)
-			end
-		end
-	end
-end)
-
-CreateThread(function()
-	while true do
-		if AttachedCamEntity and not DoesEntityExist(AttachedCamEntity) then
-			AttachCam(PlayerPedId(), FollowCam)
-		end
-
-		Wait(500)
-	end
+AddEventHandler("onResourceStop",function(r)
+    if r==GetCurrentResourceName() then
+        DisableCam()
+    end
 end)
