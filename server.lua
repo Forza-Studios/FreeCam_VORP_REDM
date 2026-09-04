@@ -7,6 +7,7 @@ RegisterNetEvent("coi_cam:upload", function()
         encoding = "jpg",
         quality = 0.92
     }, function(err, data)
+        print("^3[COI CAM] DEBUG: Data received: " .. tostring(data))
 
         if err then
             print("^1[COI CAM]^7 Screenshot failed:", err)
