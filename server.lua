@@ -1,178 +1,178 @@
 -- =====================================================================
--- Base64 decode (pure Lua, no external deps needed)
+-- URL Encode (required for ImgBB)
 -- =====================================================================
-local B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
-local function Base64Decode(data)
-    data = string.gsub(data, '[^' .. B64_CHARS .. '=]', '')
+local function UrlEncode(str)
+    if not str then return "" end
 
-    return (data:gsub('.', function(x)
-        if x == '=' then return '' end
-        local r, f = '', (B64_CHARS:find(x) - 1)
-        for i = 6, 1, -1 do
-            r = r .. (f % 2 ^ i - f % 2 ^ (i - 1) > 0 and '1' or '0')
-        end
-        return r
-    end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
-        if #x ~= 8 then return '' end
-        local c = 0
-        for i = 1, 8 do
-            c = c + (x:sub(i, i) == '1' and 2 ^ (8 - i) or 0)
-        end
-        return string.char(c)
-    end))
+    str = str:gsub("\n", "\r\n")
+    str = str:gsub("([^%w%-_%.~])", function(c)
+        return string.format("%%%02X", string.byte(c))
+    end)
+
+    return str
 end
 
 -- =====================================================================
--- catbox.moe upload: multipart POST → returns a plain-text image URL
+-- ImgBB Upload
 -- =====================================================================
-local function UploadToCatbox(fileBytes, callback)
-    local boundary = 'CatboxBoundary' .. tostring(math.random(100000, 999999))
 
-    local body = table.concat({
-        '--' .. boundary, '\r\n',
-        'Content-Disposition: form-data; name="filename"; filename="screenshot.jpg"', '\r\n',
-        'Content-Type: image/jpeg', '\r\n',
-        '\r\n',
-        'ImageData', '\r\n',
-        '--' .. boundary, '\r\n',
-        'Content-Disposition: form-data; name="image"', '\r\n',
-        'Content-Type: image/jpeg', '\r\n',
-        '\r\n',
-        fileBytes, '\r\n',
-        '--' .. boundary .. '--', '\r\n'
-    })
-
-    PerformHttpRequest('https://files.catbox.moe/upload.php', function(statusCode, response, headers)
-        -- catbox.moe returns a plain-text filename on success (e.g. "abc123.jpg")
-        -- or a short error message. We prepend the base domain for the full URL.
-        local imageUrl
-        if type(response) == 'string' then
-            local filename = response:match('([^/%s]+)%s*$')
-            if filename then
-                imageUrl = 'https://files.catbox.moe/' .. filename
-            else
-                imageUrl = 'https://files.catbox.moe/' .. response
-            end
-        else
-            imageUrl = ''
-        end
-
-        if imageUrl and #imageUrl > 0 then
-            callback(imageUrl)
-        else
-            -- catbox returned an error message
-            callback(nil)
-        end
-    end, 'POST', body, {
-        ['Content-Type'] = 'multipart/form-data; boundary=' .. boundary
-    })
-end
-
--- =====================================================================
--- Post to Discord via plain JSON embed (no multipart / no file field)
--- =====================================================================
-local function PostToDiscordEmbed(playerName, imageUrl)
-    local web = Config.WebhookURL
-
-    -- Clean the webhook base for embed URL field (strip the trailing dash)
-    local baseUrl = string.gsub(Config.WebhookURL, '[-?]+$', '')
-    if baseUrl == '' then baseUrl = Config.WebhookURL end
-
-    -- Build the JSON string properly — no escaping nightmares
-    local json_str = '{'
-    json_str = json_str .. '"embeds":[{'
-    json_str = json_str .. '"color":' .. string.format("%d", 0x00FF88) .. ','
-    json_str = json_str .. '"url":"' .. baseUrl .. '/","'
-    json_str = json_str .. '"title":"Photo Capture","'
-    json_str = json_str .. '"fields":[{'
-    json_str = json_str .. '"name":"Player","value":"' .. playerName .. '",inline:true,'
-    json_str = json_str .. '"name":"Location","value":"' .. imageUrl .. '",inline:false}'
-    json_str = json_str .. '],"'
-    json_str = json_str .. '"footer":{"text":"photo uploaded","icon_url":"' .. baseUrl .. '/"},'
-    json_str = json_str .. '"thumbnail":{"url":"' .. imageUrl .. '"}}'
-    json_str = json_str .. '}'
-
-    PerformHttpRequest(web, function(statusCode, response, headers)
-        if statusCode == 200 or statusCode == 204 then
-            print(('^2[COI CAM]^7 Disc photo sent for %s.'):format(playerName))
-            TriggerClientEvent('chat:addMessage', source, { args = '📸 Photo uploaded.' })
-        else
-            print(('^1[COI CAM]^7 Disc webhook failed for %s (status %s): %s')
-                :format(playerName, tostring(statusCode), tostring(response)))
-            TriggerClientEvent('chat:addMessage', source, { args = '⚠️ Photo webhook failed.' })
-        end
-    end, 'POST', json_str, {
-        ['Content-Type'] = 'application/json'
-    })
-end
-
--- =====================================================================
--- Upload pipeline: base64 → catbox.moe → discord embed
--- =====================================================================
 local MAX_ATTEMPTS = 3
 
-local function UploadPipeline(src, fileBytes, attempt)
+local function UploadToImgBB(base64Data, callback)
+    local body =
+        "key=" .. UrlEncode(Config.ImgBBKey) ..
+        "&image=" .. UrlEncode(base64Data)
+
+    PerformHttpRequest(
+        "https://api.imgbb.com/1/upload",
+        function(statusCode, response)
+            if statusCode ~= 200 then
+                print(("^1[COI CAM]^7 ImgBB Error %s: %s")
+                    :format(statusCode, tostring(response)))
+                callback(nil, ("HTTP %s"):format(statusCode))
+                return
+            end
+
+            local ok, data = pcall(json.decode, response)
+
+            if ok and data and data.success and data.data and data.data.url then
+                callback(data.data.url)
+            else
+                print(("^1[COI CAM]^7 Invalid ImgBB response: %s")
+                    :format(tostring(response)))
+                callback(nil, "Invalid response")
+            end
+        end,
+        "POST",
+        body,
+        {
+            ["Content-Type"] = "application/x-www-form-urlencoded"
+        }
+    )
+end
+
+-- =====================================================================
+-- Discord Embed
+-- =====================================================================
+
+local function PostToDiscordEmbed(src, playerName, imageUrl)
+    local payload = json.encode({
+        embeds = {{
+            title = "Photo Capture",
+            color = 0x00FF88,
+            fields = {
+                {
+                    name = "Player",
+                    value = playerName,
+                    inline = true
+                }
+            },
+            image = {
+                url = imageUrl
+            },
+            footer = {
+                text = "COI CAM"
+            },
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }}
+    })
+
+    PerformHttpRequest(
+        Config.WebhookURL,
+        function(statusCode, response)
+            if statusCode == 200 or statusCode == 204 then
+                print(("^2[COI CAM]^7 Photo uploaded for %s")
+                    :format(playerName))
+
+                TriggerClientEvent("chat:addMessage", src, {
+                    args = {"COI CAM", "📸 Photo uploaded."}
+                })
+            else
+                print(("^1[COI CAM]^7 Discord webhook failed (%s): %s")
+                    :format(statusCode, tostring(response)))
+            end
+        end,
+        "POST",
+        payload,
+        {
+            ["Content-Type"] = "application/json"
+        }
+    )
+end
+
+-- =====================================================================
+-- Upload Pipeline
+-- =====================================================================
+
+local function UploadPipeline(src, base64Data, attempt)
     attempt = attempt or 1
 
-    UploadToCatbox(fileBytes, function(imageUrl)
-        if not imageUrl then
-            print(('^1[COI CAM]^7 catbox returned empty URL for %s'):format(GetPlayerName(src) or src))
+    UploadToImgBB(base64Data, function(imageUrl, err)
+
+        if imageUrl then
+            PostToDiscordEmbed(src, GetPlayerName(src) or tostring(src), imageUrl)
             return
         end
 
-        -- Success — now POST the URL to Discord as a plain JSON embed.
-        -- No binary handling at all, no 40333, simple and fast.
-        PostToDiscordEmbed(GetPlayerName(src) or src, imageUrl)
-    end)
+        if attempt < MAX_ATTEMPTS then
+            print(("^3[COI CAM]^7 ImgBB upload failed (%s). Retrying (%d/%d)...")
+                :format(err or "unknown", attempt + 1, MAX_ATTEMPTS))
 
-    -- Retry logic if catbox fails
-    if attempt < MAX_ATTEMPTS then
-        CreateThread(function()
-            Wait(1500 * attempt)
-            UploadPipeline(src, fileBytes, attempt + 1)
-        end)
-    end
+            SetTimeout(1500 * attempt, function()
+                UploadPipeline(src, base64Data, attempt + 1)
+            end)
+        else
+            print(("^1[COI CAM]^7 ImgBB upload failed permanently for %s: %s")
+                :format(GetPlayerName(src) or tostring(src), err or "unknown"))
+
+            TriggerClientEvent("chat:addMessage", src, {
+                args = {"COI CAM", "⚠️ Image upload failed."}
+            })
+        end
+    end)
 end
 
 -- =====================================================================
 -- Events
 -- =====================================================================
+
 RegisterNetEvent("coi_cam:capture", function()
     local src = source
     local playerName = GetPlayerName(src)
 
-    TriggerClientEvent('chat:addMessage', src, { args = '📸 Photo captured.' })
-    print(('^2[COI CAM]^7 %s took a photo.'):format(playerName))
+    TriggerClientEvent("chat:addMessage", src, {
+        args = {"COI CAM", "📸 Photo captured."}
+    })
+
+    print(("^2[COI CAM]^7 %s took a photo."):format(playerName))
 end)
 
 RegisterNetEvent("coi_cam:upload", function(dataUri)
     local src = source
 
-    if type(dataUri) ~= 'string' then
-        print(('^1[COI CAM]^7 Rejected upload from %s: bad payload'):format(GetPlayerName(src) or src))
+    if type(dataUri) ~= "string" then
+        print(("^1[COI CAM]^7 Bad upload payload from %s")
+            :format(GetPlayerName(src) or tostring(src)))
         return
     end
 
-    local base64Data = dataUri:match('base64,(.*)')
+    local base64Data = dataUri:match("base64,(.*)")
+
     if not base64Data then
-        print(('^1[COI CAM]^7 Rejected upload from %s: not a data URI'):format(GetPlayerName(src) or src))
+        print(("^1[COI CAM]^7 Invalid data URI from %s")
+            :format(GetPlayerName(src) or tostring(src)))
         return
     end
 
-    local fileBytes = Base64Decode(base64Data)
-    if not fileBytes or #fileBytes == 0 then
-        print(('^1[COI CAM]^7 Failed to decode screenshot from %s'):format(GetPlayerName(src) or src))
+    -- Approximate binary size (base64 is ~33% larger)
+    local estimatedBytes = math.floor(#base64Data * 0.75)
+
+    if estimatedBytes > 10 * 1024 * 1024 then
+        print(("^1[COI CAM]^7 Oversized upload from %s (%d bytes)")
+            :format(GetPlayerName(src) or tostring(src), estimatedBytes))
         return
     end
 
-    -- Basic sanity cap (10 MB) so a malformed/spoofed payload can't be used
-    -- to push something huge through PerformHttpRequest.
-    if #fileBytes > 10 * 1024 * 1024 then
-        print(('^1[COI CAM]^7 Rejected oversized upload from %s (%d bytes)')
-            :format(GetPlayerName(src) or src, #fileBytes))
-        return
-    end
-
-    UploadPipeline(src, fileBytes, 1)
+    UploadPipeline(src, base64Data, 1)
 end)
