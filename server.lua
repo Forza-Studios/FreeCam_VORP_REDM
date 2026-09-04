@@ -36,9 +36,10 @@ local function UploadToImgBB(base64Data, callback)
 
             local ok, data = pcall(json.decode, response)
 
-            if ok and data and data.success and data.data and data.data.url then
-                callback(data.data.url)
-            else
+           if ok and data and data.success and data.data and data.data.url then
+    print("^2[COI CAM]^7 ImgBB URL: " .. (data.data.display_url or data.data.url))
+    callback(data.data.display_url or data.data.url)
+else
                 print(("^1[COI CAM]^7 Invalid ImgBB response: %s")
                     :format(tostring(response)))
                 callback(nil, "Invalid response")
