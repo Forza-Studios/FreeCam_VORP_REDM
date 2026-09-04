@@ -1,8 +1,8 @@
 Config = {}
 
 -- Configurable controls
-Config.IncreaseSpeedControl = {`INPUT_CREATOR_LT`, `INPUT_PREV_WEAPON`}    -- Page Up, Mouse Wheel Up
-Config.DecreaseSpeedControl = {`INPUT_CREATOR_RT`, `INPUT_NEXT_WEAPON`}    -- Page Down, Mouse Wheel Down
+Config.IncreaseSpeedControl = {`INPUT_CREATOR_LT`, `INPUT_PREV_weapon`}    -- Page Up, Mouse Wheel Up
+Config.DecreaseSpeedControl = {`INPUT_CREATOR_RT`, `INPUT_NEXT_weapon`}    -- Page Down, Mouse Wheel Down
 Config.UpControl            = `INPUT_JUMP`                                 -- Spacebar
 Config.DownControl          = `INPUT_SPRINT`                               -- Shift
 Config.ForwardControl       = `INPUT_MOVE_UP_ONLY`                         -- W
@@ -20,6 +20,7 @@ Config.NextFilterControl    = `INPUT_INTERACT_ANIMAL`                      -- G
 Config.ToggleFilterControl  = {`INPUT_WHISTLE`, `INPUT_WHISTLE_HORSEBACK`} -- H
 Config.ToggleGridControl    = `INPUT_OPEN_JOURNAL`                         -- J
 Config.ExitLockedCamControl = `INPUT_NEXT_CAMERA`                          -- V
+Config.TakeShotControl      = `INPUT_FRONTEND_ACCEPT`                      -- Enter
 
 -- Maximum movement speed
 Config.MaxSpeed = 1.00
@@ -53,3 +54,6 @@ Config.RollSpeed = 1.0
 
 -- Model for the dummy object that controls the camera movement
 Config.ControllerModel = `scriptedball`
+
+-- Discord Webhook URL for screenshot uploads
+Config.WebhookURL = 'https://discord.com/api/webhooks/1545348277980106783/PFBUZz5SJ3dSpcySUO44vfD45qzsA5nJSOfr3yN6i2Z8z4TQmFz4xPEsJbbca1NL2gz-'

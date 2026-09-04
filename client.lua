@@ -178,6 +178,19 @@ function ToggleFollowCam()
 	ToggleAttachedOrFollowCam(true)
 end
 
+function TakeShot()
+	local oldHud = ShowHud
+	ShowHud = false
+	Wait(200)
+	PlaySoundFrontend("Camera_Shoot", "RDRO_Character_Creator_Sounds", true)
+
+	local url = TakeScreenshot("freecam_shot")
+	TriggerServerEvent('freecam:screenshot', url, GetPlayerName())
+
+	Wait(1000)
+	ShowHud = oldHud
+end
+
 function CheckControls(func, pad, controls)
 	if type(controls) == 'number' then
 		return func(pad, controls)
@@ -253,7 +266,7 @@ CreateThread(function()
 				else
 					DrawText(string.format('FreeCam Speed: %.3f', Speed), 0.5, 0.90, true)
 					DrawText('W/A/S/D - Move, Spacebar/Shift - Up/Down, Page Up/Page Down - Change speed, Z/X - Zoom, C/V - Roll, B - Reset, Q - Hide HUD', 0.5, 0.93, true)
-					DrawText('F/G - Cycle Filter, H - Toggle Filter, J - Toggle Grid', 0.5, 0.96, true)
+					DrawText('F/G - Cycle Filter, H - Toggle Filter, J - Toggle Grid, Enter - Send to Discord', 0.5, 0.96, true)
 				end
 			else
 				HideHudAndRadarThisFrame()
@@ -282,6 +295,11 @@ CreateThread(function()
 				DisableAllControlActions(0)
 				EnableControlAction(0, `INPUT_FRONTEND_PAUSE_ALTERNATE`)
 				EnableControlAction(0, `INPUT_MP_TEXT_CHAT_ALL`)
+				EnableControlAction(0, Config.TakeShotControl)
+
+				if CheckControls(IsDisabledControlJustReleased, 0, Config.TakeShotControl) then
+					TakeShot()
+				end
 
 				-- Ensure speed is within the specified range
 				if Speed < Config.MinSpeed then
@@ -384,34 +402,34 @@ CreateThread(function()
 				end
 
 				-- Increase FOV
-				if CheckControls(IsDisabledControlPressed, 0, Config.IncreaseFovControl) then
-					fov = fov + Config.ZoomSpeed
-				end
+	if CheckControls(IsDisabledControlPressed, 0, Config.IncreaseFovControl) then
+		fov = fov + Config.ZoomSpeed
+	end
 
-				-- Decrease FOV
-				if CheckControls(IsDisabledControlPressed, 0, Config.DecreaseFovControl) then
-					fov = fov - Config.ZoomSpeed
-				end
+	-- Decrease FOV
+	if CheckControls(IsDisabledControlPressed, 0, Config.DecreaseFovControl) then
+		fov = fov - Config.ZoomSpeed
+	end
 
-				-- Next filter
-				if CheckControls(IsDisabledControlJustPressed, 0, Config.NextFilterControl) then
-					NextFilter()
-				end
+	-- Next filter
+	if CheckControls(IsDisabledControlJustPressed, 0, Config.NextFilterControl) then
+		NextFilter()
+	end
 
-				-- Previous filter
-				if CheckControls(IsDisabledControlJustPressed, 0, Config.PrevFilterControl) then
-					PrevFilter()
-				end
+	-- Previous filter
+	if CheckControls(IsDisabledControlJustPressed, 0, Config.PrevFilterControl) then
+		PrevFilter()
+	end
 
-				-- Reset filter
-				if CheckControls(IsDisabledControlJustPressed, 0, Config.ToggleFilterControl) then
-					ToggleFilter()
-				end
+	-- Reset filter
+	if CheckControls(IsDisabledControlJustPressed, 0, Config.ToggleFilterControl) then
+		ToggleFilter()
+	end
 
-				-- Toggle grid
-				if CheckControls(IsDisabledControlJustPressed, 0, Config.ToggleGridControl) then
-					ToggleGrid()
-				end
+	-- Toggle grid
+	if CheckControls(IsDisabledControlJustPressed, 0, Config.ToggleGridControl) then
+		ToggleGrid()
+	end
 
 				SetEntityCoordsNoOffset(Controller, x, y, z)
 				SetCamRot(Cam, pitch, roll, yaw, 2)
