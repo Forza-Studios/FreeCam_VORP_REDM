@@ -38,6 +38,8 @@ local function NativePhoto()
         'files[]',
         { encoding = 'jpg', quality = 0.90 },
         function(data)
+            -- data contains the webhook response, log for debugging
+            print('COI CAM: screenshot uploaded to Discord (response: ' .. tostring(data) .. ')');
             TriggerEvent('chat:addMessage', { args = '📸 Photo uploaded.' })
         end
     )
