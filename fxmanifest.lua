@@ -7,5 +7,7 @@ description 'COI Camera - RedM FreeCam + Discord Upload'
 
 dependency 'screenshot-basic'
 
+client_script 'config.lua'
 client_script 'client.lua'
+server_script 'config.lua'
 server_script 'server.lua'

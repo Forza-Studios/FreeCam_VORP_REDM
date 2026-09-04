@@ -32,8 +32,15 @@ local function NativePhoto()
 
     Wait(350)
 
-    -- Server handles screenshot + Discord upload
-    TriggerServerEvent("coi_cam:capture")
+    -- Client handles screenshot + Discord upload directly via screenshot-basic API
+    exports['screenshot-basic']:requestScreenshotUpload(
+        Config.WebhookURL,
+        'files[]',
+        { encoding = 'jpg', quality = 0.90 },
+        function(data)
+            TriggerEvent('chat:addMessage', { args = '📸 Photo uploaded.' })
+        end
+    )
 
     Wait(150)
 
