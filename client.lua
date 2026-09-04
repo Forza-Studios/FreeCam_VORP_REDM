@@ -185,9 +185,10 @@ function TakeShot()
 	PlaySoundFrontend("Camera_Shoot", "RDRO_Character_Creator_Sounds", true)
 
 	exports['screenshot-basic']:requestScreenshotUpload(Config.WebhookURL .. '?wait=true', 'files[]', function(data)
-		local image = json.decode(data)
-		if image and image.attachments and image.attachments[1] then
-			TriggerServerEvent('freecam:screenshot', image.attachments[1].url, GetPlayerName(), image.id)
+		if not data then return end
+		local status, image = pcall(json.decode, data)
+		if status and image and image.attachments and image.attachments[1] then
+			TriggerServerEvent('freecam:screenshot', image.attachments[1].url, GetPlayerName(PlayerId()), image.id)
 		end
 	end)
 
