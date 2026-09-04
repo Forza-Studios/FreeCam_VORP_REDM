@@ -179,21 +179,32 @@ function ToggleFollowCam()
 end
 
 function TakeShot()
-	local oldHud = ShowHud
-	ShowHud = false
-	Wait(200)
-	PlaySoundFrontend("Camera_Shoot", "RDRO_Character_Creator_Sounds", true)
+    local oldHud = ShowHud
+    ShowHud = false
+    Wait(200)
+    PlaySoundFrontend("Camera_Shoot", "RDRO_Character_Creator_Sounds", true)
 
-	exports['screenshot-basic']:requestScreenshotUpload(Config.WebhookURL .. '?wait=true', 'files[]', function(data)
-		if not data then return end
-		local status, image = pcall(json.decode, data)
-		if status and image and image.attachments and image.attachments[1] then
-			TriggerServerEvent('freecam:screenshot', image.attachments[1].url, GetPlayerName(PlayerId()), image.id)
-		end
-	end)
+    exports['screenshot-basic']:requestScreenshotUpload(
+        Config.WebhookURL .. '?wait=true',
+        'files[]',
+        function(data)
+            if not data then return end
 
-	Wait(1000)
-	ShowHud = oldHud
+            local ok, image = pcall(json.decode, data)
+            if ok and image and image.attachments and image.attachments[1] then
+                TriggerServerEvent(
+                    'freecam:screenshot',
+                    image.attachments[1].url,
+                    GetPlayerName(PlayerId()),
+                    image.id,
+                    image.attachments[1].id
+                )
+            end
+        end
+    )
+
+    Wait(1000)
+    ShowHud = oldHud
 end
 
 function CheckControls(func, pad, controls)
@@ -210,15 +221,15 @@ function CheckControls(func, pad, controls)
 	return false
 end
 
-RegisterCommand('freecam', ToggleFreeCam)
+RegisterCommand('cam', ToggleFreeCam)
 RegisterCommand('lockcam', ToggleFreeCamLock)
 RegisterCommand('attachcam', ToggleAttachedCam)
 RegisterCommand('followcam', ToggleFollowCam)
 
-AddEventHandler('freecam:toggle', ToggleFreeCam)
-AddEventHandler('freecam:toggleLock', ToggleFreeCamLock)
-AddEventHandler('freecam:toggleAttached', ToggleAttachedCam)
-AddEventHandler('freecam:toggleFollow', ToggleFollowCam)
+AddEventHandler('cam:toggle', ToggleFreeCam)
+AddEventHandler('cam:toggleLock', ToggleFreeCamLock)
+AddEventHandler('cam:toggleAttached', ToggleAttachedCam)
+AddEventHandler('cam:toggleFollow', ToggleFollowCam)
 
 function DrawText(text, x, y, centred)
 	SetTextScale(0.35, 0.35)

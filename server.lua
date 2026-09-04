@@ -58,32 +58,35 @@ local function postToDiscord(description, image, messageId)
 end
 
 RegisterNetEvent('freecam:screenshot')
-AddEventHandler('freecam:screenshot', function(url, playerName, messageId)
-    local _source = source
-    local resolvedMsgId = messageId
+AddEventHandler('freecam:screenshot', function(url, playerName, messageId, attachmentId)
+    local src = source
+    local displayName = GetPlayerName(src) or playerName or "Player"
 
-    if resolvedMsgId == nil and type(playerName) == 'string' and string.match(playerName, '^%d+$') then
-        resolvedMsgId = playerName
-    end
+    local data = {
+        content = "**" .. displayName .. "** took a screenshot!",
+        embeds = {{
+            title = "📸 FreeCam Screenshot",
+            color = 65280,
+            image = { url = url },
+            footer = { text = "VORP" },
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }},
+        attachments = attachmentId and {
+            { id = tostring(attachmentId) }
+        } or nil
+    }
 
-    local rawName = GetPlayerName(_source)
-    local displayName = (rawName and rawName ~= "" and rawName ~= "Invalid") and rawName or (playerName and playerName ~= "Invalid" and playerName) or "Player"
-
-    -- Fetch character name if VORP character exists
-    if VORPcore and VORPcore.getUser then
-        local User = VORPcore.getUser(_source)
-        if User then
-            local Character = User.getUsedCharacter
-            if Character and Character.firstname and Character.lastname then
-                local charName = Character.firstname .. ' ' .. Character.lastname
-                if rawName and rawName ~= "" and rawName ~= "Invalid" then
-                    displayName = charName .. ' (' .. rawName .. ')'
-                else
-                    displayName = charName
-                end
+    PerformHttpRequest(
+        Config.WebhookURL .. "/messages/" .. tostring(messageId),
+        function(err, text)
+            if err == 200 or err == 204 then
+                print("✅ Screenshot embed updated")
+            else
+                print("❌ PATCH failed: " .. tostring(err))
             end
-        end
-    end
-
-    postToDiscord(displayName, url, resolvedMsgId)
+        end,
+        "PATCH",
+        json.encode(data),
+        { ["Content-Type"] = "application/json" }
+    )
 end)
