@@ -29,8 +29,6 @@ end
 local function UploadToCatbox(fileBytes, callback)
     local boundary = 'CatboxBoundary' .. tostring(math.random(100000, 999999))
 
-    -- Minimal multipart body — catbox is very lenient about content-type
-    -- in the request. Two form fields: filename + image.
     local body = table.concat({
         '--' .. boundary, '\r\n',
         'Content-Disposition: form-data; name="filename"; filename="screenshot.jpg"', '\r\n',
@@ -46,23 +44,25 @@ local function UploadToCatbox(fileBytes, callback)
     })
 
     PerformHttpRequest('https://files.catbox.moe/upload.php', function(statusCode, response, headers)
-        -- catbox.moe returns the image URL as plain text on success,
-        -- or a short error message on failure.
+        -- catbox.moe returns a plain-text filename on success (e.g. "abc123.jpg")
+        -- or a short error message. We prepend the base domain for the full URL.
         local imageUrl
-        if type(response) == 'string' and response:find('^http') then
-            imageUrl = response
+        if type(response) == 'string' then
+            local filename = response:match('([^/%s]+)%s*$')
+            if filename then
+                imageUrl = 'https://files.catbox.moe/' .. filename
+            else
+                imageUrl = 'https://files.catbox.moe/' .. response
+            end
         else
-            imageUrl = response
+            imageUrl = ''
         end
 
         if imageUrl and #imageUrl > 0 then
             callback(imageUrl)
         else
-            -- Fallback: Discord webhook POST as plain JSON embed (no binary).
-            -- catbox returned a URL → relay it to Discord via embed.
-            if callback then
-                callback(imageUrl or nil)
-            end
+            -- catbox returned an error message
+            callback(nil)
         end
     end, 'POST', body, {
         ['Content-Type'] = 'multipart/form-data; boundary=' .. boundary
@@ -72,34 +72,26 @@ end
 -- =====================================================================
 -- Post to Discord via plain JSON embed (no multipart / no file field)
 -- =====================================================================
-local function PostToDiscordEmbed(playerName, imageUrl, reason)
+local function PostToDiscordEmbed(playerName, imageUrl)
     local web = Config.WebhookURL
 
-    -- Build the JSON payload inline — no need for a Multipart at all.
-    -- Discord embed: a simple JSON POST. 100% reliable, no 40333 from Cloudflare.
-    local payload = table.concat({
-        '{',
-        '"embeds":[',
-        '{',
-        '"color":' .. string.format("%d", 0x00FF88),
-        ',',
-        '"url":"',
-        web .. '/',
-        '",',
-        '"title":"",',
-        '"fields":[',
-        '"name":"Player",',
-        '"value":"' .. playerName .. '",',
-        '"inline":true,',
-        '"name":"Location",',
-        '"value":"' .. tostring(imageUrl or "N/A") .. '",',
-        '"inline":false',
-        '],',
-        '"footer":{"text":"photo uploaded",' .. reason .. '","icon_url":"' .. web .. '}',',
-        '"thumbnail":{"url":"' .. imageUrl .. '"}',
-        '}]',
-        '}'
-    })
+    -- Clean the webhook base for embed URL field (strip the trailing dash)
+    local baseUrl = string.gsub(Config.WebhookURL, '[-?]+$', '')
+    if baseUrl == '' then baseUrl = Config.WebhookURL end
+
+    -- Build the JSON string properly — no escaping nightmares
+    local json_str = '{'
+    json_str = json_str .. '"embeds":[{'
+    json_str = json_str .. '"color":' .. string.format("%d", 0x00FF88) .. ','
+    json_str = json_str .. '"url":"' .. baseUrl .. '/","'
+    json_str = json_str .. '"title":"Photo Capture","'
+    json_str = json_str .. '"fields":[{'
+    json_str = json_str .. '"name":"Player","value":"' .. playerName .. '",inline:true,'
+    json_str = json_str .. '"name":"Location","value":"' .. imageUrl .. '",inline:false}'
+    json_str = json_str .. '],"'
+    json_str = json_str .. '"footer":{"text":"photo uploaded","icon_url":"' .. baseUrl .. '/"},'
+    json_str = json_str .. '"thumbnail":{"url":"' .. imageUrl .. '"}}'
+    json_str = json_str .. '}'
 
     PerformHttpRequest(web, function(statusCode, response, headers)
         if statusCode == 200 or statusCode == 204 then
@@ -110,7 +102,7 @@ local function PostToDiscordEmbed(playerName, imageUrl, reason)
                 :format(playerName, tostring(statusCode), tostring(response)))
             TriggerClientEvent('chat:addMessage', source, { args = '⚠️ Photo webhook failed.' })
         end
-    end, 'POST', payload, {
+    end, 'POST', json_str, {
         ['Content-Type'] = 'application/json'
     })
 end
@@ -131,7 +123,7 @@ local function UploadPipeline(src, fileBytes, attempt)
 
         -- Success — now POST the URL to Discord as a plain JSON embed.
         -- No binary handling at all, no 40333, simple and fast.
-        PostToDiscordEmbed(GetPlayerName(src) or src, imageUrl, "")
+        PostToDiscordEmbed(GetPlayerName(src) or src, imageUrl)
     end)
 
     -- Retry logic if catbox fails
