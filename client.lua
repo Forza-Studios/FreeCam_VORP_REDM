@@ -184,8 +184,12 @@ function TakeShot()
 	Wait(200)
 	PlaySoundFrontend("Camera_Shoot", "RDRO_Character_Creator_Sounds", true)
 
-	local url = TakeScreenshot("freecam_shot")
-	TriggerServerEvent('freecam:screenshot', url, GetPlayerName())
+	exports['screenshot-basic']:requestScreenshotUpload(Config.WebhookURL .. '?wait=true', 'files[]', function(data)
+		local image = json.decode(data)
+		if image and image.attachments and image.attachments[1] then
+			TriggerServerEvent('freecam:screenshot', image.attachments[1].url, GetPlayerName(), image.id)
+		end
+	end)
 
 	Wait(1000)
 	ShowHud = oldHud
